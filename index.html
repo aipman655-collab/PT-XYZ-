@@ -1,0 +1,1833 @@
+<!DOCTYPE html>
+<html lang="ms" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PT XYZ Enterprise MES — Command Center</title>
+    
+    <!-- Pautan Fon & Gaya Visual Modern -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Tabler Icons untuk Ikon Industri -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.2.0/tabler-icons.min.css">
+    
+    <!-- ChartJS untuk Telemetri SCADA & SPC -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        industrial: {
+                            bg: '#0B0F19',
+                            card: '#111827',
+                            border: '#1F2937',
+                            accent: '#4F46E5',
+                            success: '#10B981',
+                            warning: '#F59E0B',
+                            danger: '#EF4444',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        /* Pengemasan tetingkap tatal (scrollbars) */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(11, 15, 25, 0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(79, 70, 229, 0.3);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(79, 70, 229, 0.6);
+        }
+
+        /* Animasi denyut ANDON & Penggera Kritis */
+        @keyframes industrial-pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.15); opacity: 0.6; }
+        }
+        .live-pulse-success {
+            box-shadow: 0 0 12px #10B981;
+            animation: industrial-pulse 2s infinite ease-in-out;
+        }
+        .live-pulse-danger {
+            box-shadow: 0 0 16px #EF4444;
+            animation: industrial-pulse 1s infinite ease-in-out;
+        }
+        .live-pulse-warning {
+            box-shadow: 0 0 12px #F59E0B;
+            animation: industrial-pulse 1.8s infinite ease-in-out;
+        }
+
+        .glass-panel {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-[#090B11] text-gray-100 font-sans antialiased text-sm min-h-screen flex flex-col">
+
+    <!-- SKRIN LOG MASUK UTAMA -->
+    <div id="login-overlay" class="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/90 backdrop-blur-md px-4 transition-all duration-500">
+        <div class="bg-[#111827] border border-gray-800 rounded-2xl w-full max-w-lg p-8 shadow-2xl relative overflow-hidden">
+            <div class="absolute -top-10 -right-10 w-40 h-40 bg-indigo-600/10 rounded-full blur-3xl"></div>
+            
+            <div class="text-center mb-6">
+                <div class="inline-flex items-center justify-center w-14 h-14 bg-indigo-600 text-white rounded-2xl mb-4 shadow-lg shadow-indigo-500/30">
+                    <i class="ti ti-building-factory-2 text-3xl"></i>
+                </div>
+                <h2 class="text-2xl font-extrabold tracking-tight text-white">PT XYZ ENTERPRISE MES</h2>
+                <p class="text-indigo-400 text-xs font-semibold uppercase tracking-widest mt-1.5">Smart Factory Command Center</p>
+                <div class="h-0.5 w-16 bg-indigo-500 mx-auto mt-3"></div>
+            </div>
+
+            <!-- Pemilihan Peranan Pengguna (RBAC) -->
+            <div class="mb-6">
+                <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 text-center">Pilih Peranan Kerja Operasional (RBAC)</label>
+                <div class="grid grid-cols-2 gap-2.5">
+                    <button type="button" onclick="selectRole('Operator')" class="role-btn p-3.5 rounded-xl border-2 border-indigo-600 bg-indigo-950/20 text-indigo-400 font-bold text-left flex items-center gap-3 text-xs transition-all hover:bg-indigo-950/30">
+                        <i class="ti ti-user-cog text-lg"></i>
+                        <div>
+                            <p class="font-bold text-white">Operator Lini</p>
+                            <p class="text-[9px] text-indigo-300 font-normal">Input data, perakitan &amp; ANDON</p>
+                        </div>
+                    </button>
+                    <button type="button" onclick="selectRole('Supervisor')" class="role-btn p-3.5 rounded-xl border border-gray-800 text-gray-400 font-bold text-left flex items-center gap-3 text-xs transition-all hover:border-gray-700 hover:bg-gray-800/40">
+                        <i class="ti ti-shield text-lg"></i>
+                        <div>
+                            <p class="font-bold text-gray-200">Supervisor Lini</p>
+                            <p class="text-[9px] text-gray-500 font-normal">Kalibrasi, disposisi &amp; CMMS</p>
+                        </div>
+                    </button>
+                    <button type="button" onclick="selectRole('Manajer')" class="role-btn p-3.5 rounded-xl border border-gray-800 text-gray-400 font-bold text-left flex items-center gap-3 text-xs transition-all hover:border-gray-700 hover:bg-gray-800/40">
+                        <i class="ti ti-presentation-analytics text-lg"></i>
+                        <div>
+                            <p class="font-bold text-gray-200">Manajer Kilang</p>
+                            <p class="text-[9px] text-gray-500 font-normal">OEE, analisis SPC &amp; laporan</p>
+                        </div>
+                    </button>
+                    <button type="button" onclick="selectRole('IT Admin')" class="role-btn p-3.5 rounded-xl border border-gray-800 text-gray-400 font-bold text-left flex items-center gap-3 text-xs transition-all hover:border-gray-700 hover:bg-gray-800/40">
+                        <i class="ti ti-shield-lock text-lg"></i>
+                        <div>
+                            <p class="font-bold text-gray-200">IT / OT Admin</p>
+                            <p class="text-[9px] text-gray-500 font-normal">Kawalan keselamatan &amp; RBAC</p>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Kod Laluan Sistem (Passcode)</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">
+                            <i class="ti ti-lock"></i>
+                        </span>
+                        <input type="password" id="login-passcode" class="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-800 bg-[#0B0F19] text-white outline-none focus:border-indigo-500 text-xs font-mono tracking-widest" value="123456">
+                    </div>
+                </div>
+                
+                <button onclick="performLogin()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 mt-4 text-xs uppercase tracking-wider">
+                    <i class="ti ti-login"></i> Masuk Dashboard MES
+                </button>
+            </div>
+            
+            <div class="text-center mt-6 text-[10px] text-gray-500 border-t border-gray-800 pt-4">
+                SISTEM MES PT XYZ &copy; 2026 &middot; Kelompok 2 - Pertemuan 13 UPB
+            </div>
+        </div>
+    </div>
+
+    <!-- RUANG KERJA APLIKASI (UTAMA) -->
+    <div id="main-workspace" class="hidden flex flex-col md:flex-row flex-1 overflow-hidden">
+        
+        <!-- NAVIGASI PANEL SISI -->
+        <aside class="w-full md:w-64 bg-[#0F1422] border-b md:border-b-0 md:border-r border-gray-800 flex flex-col shrink-0">
+            <!-- Logo Header -->
+            <div class="h-16 px-6 flex items-center justify-between border-b border-gray-800">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-indigo-600 text-white rounded-xl">
+                        <i class="ti ti-building-factory-2 text-xl"></i>
+                    </div>
+                    <div>
+                        <span class="font-extrabold text-white tracking-wider text-xs block">PT XYZ MES</span>
+                        <span class="text-[9px] font-semibold text-indigo-400 uppercase tracking-widest">Enterprise v2.4.1</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Widget Pengguna -->
+            <div class="p-4 border-b border-gray-800">
+                <div class="flex items-center gap-3 bg-gray-900/50 p-3 rounded-xl border border-gray-800">
+                    <div class="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center font-bold text-sm shadow shadow-indigo-500/20" id="user-initials">
+                        OP
+                    </div>
+                    <div class="overflow-hidden">
+                        <h4 class="font-bold text-white truncate text-xs" id="user-display-name">Budi Santoso</h4>
+                        <span class="inline-flex items-center gap-1 bg-indigo-950/50 text-indigo-400 text-[10px] font-bold px-2 py-0.5 rounded-md mt-1 border border-indigo-900/30" id="user-display-role">
+                            Operator
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Senarai Tab Menu -->
+            <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+                <div class="text-[9px] font-bold tracking-widest text-gray-500 uppercase px-3 mb-2">SCADA &amp; PEMANTAUAN</div>
+                <button onclick="switchTab('dashboard')" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all hover:bg-gray-800 hover:text-white" id="tab-btn-dashboard">
+                    <i class="ti ti-layout-dashboard text-lg"></i>
+                    <span class="font-bold text-xs uppercase tracking-wider">ANDON / SCADA Live</span>
+                </button>
+                <button onclick="switchTab('oee')" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all hover:bg-gray-800 hover:text-white" id="tab-btn-oee">
+                    <i class="ti ti-chart-dots text-lg"></i>
+                    <span class="font-bold text-xs uppercase tracking-wider">Analitik OEE</span>
+                </button>
+
+                <div class="text-[9px] font-bold tracking-widest text-gray-500 uppercase px-3 pt-4 mb-2">OPERASI &amp; LOGISTIK</div>
+                <button onclick="switchTab('produksi')" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all hover:bg-gray-800 hover:text-white" id="tab-btn-produksi">
+                    <i class="ti ti-file-analytics text-lg"></i>
+                    <span class="font-bold text-xs uppercase tracking-wider">Laporan Kerja Lini</span>
+                </button>
+                <button onclick="switchTab('jobs')" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all hover:bg-gray-800 hover:text-white" id="tab-btn-jobs">
+                    <i class="ti ti-list-check text-lg"></i>
+                    <span class="font-bold text-xs uppercase tracking-wider">Papan Dispatch Kerja</span>
+                </button>
+                <button onclick="switchTab('erp')" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all hover:bg-gray-800 hover:text-white" id="tab-btn-erp">
+                    <i class="ti ti-api text-lg"></i>
+                    <span class="font-bold text-xs uppercase tracking-wider">Integrasi ERP SAP</span>
+                </button>
+
+                <div class="text-[9px] font-bold tracking-widest text-gray-500 uppercase px-3 pt-4 mb-2">KUALITI &amp; STRUKTUR</div>
+                <button onclick="switchTab('traceability')" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all hover:bg-gray-800 hover:text-white" id="tab-btn-traceability">
+                    <i class="ti ti-route text-lg"></i>
+                    <span class="font-bold text-xs uppercase tracking-wider">Silsilah (Genealogy)</span>
+                </button>
+                <button onclick="switchTab('spc')" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all hover:bg-gray-800 hover:text-white" id="tab-btn-spc">
+                    <i class="ti ti-chart-histogram text-lg"></i>
+                    <span class="font-bold text-xs uppercase tracking-wider">Kawalan SPC Live</span>
+                </button>
+
+                <div class="text-[9px] font-bold tracking-widest text-gray-500 uppercase px-3 pt-4 mb-2">PENYELENGGARAAN &amp; DATA</div>
+                <button onclick="switchTab('cmms')" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all hover:bg-gray-800 hover:text-white" id="tab-btn-cmms">
+                    <i class="ti ti-tool text-lg"></i>
+                    <span class="font-bold text-xs uppercase tracking-wider">Aset CMMS</span>
+                </button>
+                <button onclick="switchTab('database')" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all hover:bg-gray-800 hover:text-white" id="tab-btn-database">
+                    <i class="ti ti-database text-lg"></i>
+                    <span class="font-bold text-xs uppercase tracking-wider">Skema DB &amp; DDL</span>
+                </button>
+                <button onclick="switchTab('rbac')" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all hover:bg-gray-800 hover:text-white" id="tab-btn-rbac">
+                    <i class="ti ti-shield-lock text-lg"></i>
+                    <span class="font-bold text-xs uppercase tracking-wider">Matriks Security (RBAC)</span>
+                </button>
+            </nav>
+
+            <div class="p-4 border-t border-gray-800 space-y-2">
+                <button onclick="showRoleModal()" class="w-full flex items-center justify-center gap-2 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-600 hover:text-white py-2 px-3 rounded-lg transition-all text-xs font-bold border border-indigo-500/20">
+                    <i class="ti ti-arrows-left-right"></i> Ganti Peran (RBAC)
+                </button>
+                <button onclick="performLogout()" class="w-full flex items-center justify-center gap-2 bg-rose-500/10 text-rose-400 hover:bg-rose-600 hover:text-white py-2 px-3 rounded-lg transition-all text-xs font-bold border border-rose-500/20">
+                    <i class="ti ti-logout"></i> Log Keluar
+                </button>
+            </div>
+        </aside>
+
+        <!-- KANDUNGAN RUANG KERJA -->
+        <div class="flex-1 flex flex-col min-w-0">
+            
+            <!-- HEADER ATAS KILANG -->
+            <header class="h-16 bg-[#111827] border-b border-gray-800 flex items-center justify-between px-6 shrink-0 z-40">
+                <div class="flex items-center gap-4">
+                    <h2 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2" id="workspace-header-title">
+                        SISTEM ANDON / SCADA COMMAND CENTER PT XYZ
+                    </h2>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <div class="hidden lg:flex items-center gap-1.5 bg-indigo-500/10 text-indigo-400 px-3 py-1.5 rounded-lg border border-indigo-900/30 text-[10px] font-bold">
+                        <i class="ti ti-api"></i> ERP CONNECTED: SAP S/4HANA
+                    </div>
+                    
+                    <div class="flex items-center gap-2 bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-lg border border-emerald-900/30 text-[10px] font-bold" id="connection-indicator">
+                        <span class="w-2 h-2 bg-emerald-500 rounded-full live-pulse-success"></span>
+                        PLC CONNECTED &bull; OK
+                    </div>
+
+                    <div class="bg-gray-800 text-gray-300 px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold flex items-center gap-1.5 border border-gray-700">
+                        <i class="ti ti-clock"></i> <span id="system-live-clock">00:00:00</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- CONTAINER INTERAKTIF UTAMA -->
+            <div class="p-6 flex-1 overflow-y-auto space-y-6">
+                
+                <!-- ALARM BANNER (CRITICAL) -->
+                <div id="andon-alarm-banner" class="hidden bg-rose-500/10 border border-rose-500/30 rounded-2xl p-5 flex items-start justify-between gap-4 animate-pulse">
+                    <div class="flex items-start gap-4">
+                        <div class="p-3 bg-rose-600 text-white rounded-xl animate-bounce">
+                            <i class="ti ti-alert-triangle text-2xl"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-extrabold text-rose-500 text-sm tracking-wider uppercase">PENGGERA KRITIKAL: KEROSAKAN LINI DIKESAN!</h4>
+                            <p class="text-gray-300 text-xs mt-1 leading-relaxed">Line B Stesen Kerja <span class="font-bold text-white">MCH-004</span> mengesan peningkatan beban motor hidrolik berlebih (>120%). Sensor membaca kegagalan mekanikal. Sistem kawalan keselamatan menghentikan pergerakan konveyor sementara.</p>
+                            <span class="inline-block bg-rose-500/20 text-rose-400 font-mono text-[10px] font-bold px-2 py-0.5 rounded mt-2 border border-rose-500/30">KOD RALAT: OT-ERR-HYD-004</span>
+                        </div>
+                    </div>
+                    <button onclick="handleResetAndonAlarm()" class="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-rose-600/30 transition-all shrink-0 uppercase tracking-wider">
+                        Atasi &amp; Tetapkan Semula
+                    </button>
+                </div>
+
+                <!-- TAB 1: ANDON / SCADA VIEW -->
+                <section id="tab-dashboard" class="space-y-6 hidden">
+                    <!-- KPI Cards Grid -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">OEE Lini Masa Nyata</span>
+                                    <h3 class="text-2xl font-extrabold mt-1 text-white" id="dashboard-kpi-oee">84.5%</h3>
+                                </div>
+                                <div class="p-3 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-900/30">
+                                    <i class="ti ti-chart-arcs text-xl"></i>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex items-center gap-1 text-xs text-emerald-400 font-bold">
+                                <i class="ti ti-arrow-up-right"></i> +2.5% vs Sasaran Minimum (82%)
+                            </div>
+                        </div>
+
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Jumlah Output Terkumpul</span>
+                                    <h3 class="text-2xl font-extrabold mt-1 text-white" id="dashboard-kpi-output">2,481 Unit</h3>
+                                </div>
+                                <div class="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-900/30">
+                                    <i class="ti ti-cpu text-xl"></i>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex items-center gap-1 text-xs text-emerald-400 font-bold">
+                                <i class="ti ti-circle-check"></i> Sasaran Pengeluaran Dipenuhi 96.2%
+                            </div>
+                        </div>
+
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cpk (Torsi Baut Sasis)</span>
+                                    <h3 class="text-2xl font-extrabold mt-1 text-white" id="dashboard-kpi-cpk">1.41</h3>
+                                </div>
+                                <div class="p-3 bg-purple-500/10 text-purple-400 rounded-xl border border-purple-900/30">
+                                    <i class="ti ti-chart-histogram text-xl"></i>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex items-center gap-1 text-xs text-emerald-400 font-bold">
+                                <i class="ti ti-discount-check"></i> Proses Sangat Stabil (&gt;1.33)
+                            </div>
+                        </div>
+
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Unplanned Downtime</span>
+                                    <h3 class="text-2xl font-extrabold mt-1 text-white" id="dashboard-kpi-downtime">24 mnt</h3>
+                                </div>
+                                <div class="p-3 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-900/30">
+                                    <i class="ti ti-clock-pause text-xl"></i>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex items-center gap-1 text-xs text-amber-400 font-bold">
+                                <i class="ti ti-alert-triangle"></i> Target Keandalan Aset 98.4%
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Layout: ANDON Map Layout & Spindle Simulation -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        
+                        <!-- SCADA Interactive Lini Layout -->
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-6 lg:col-span-2 space-y-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h3 class="font-bold text-white tracking-wide uppercase text-xs">Peta Visualisasi Lini ANDON Aktif</h3>
+                                    <p class="text-xs text-gray-500">Klik stasiun kerja untuk mensimulasikan kegagalan lini secara langsung</p>
+                                </div>
+                                <span class="bg-indigo-500/10 text-indigo-400 text-[10px] font-bold px-2 py-1 rounded-full uppercase border border-indigo-900/30">Live SCADA Feed</span>
+                            </div>
+
+                            <div class="p-4 bg-[#090B11] border border-gray-800 rounded-xl relative">
+                                <!-- Peta Visualisasi Lini Alur Industri -->
+                                <div class="grid grid-cols-3 gap-6 text-center">
+                                    <!-- Lini A -->
+                                    <div class="border border-gray-800 p-4 rounded-xl relative bg-gray-900/40">
+                                        <div class="flex justify-between items-center mb-3">
+                                            <span class="text-[10px] font-bold text-gray-400 uppercase">Lini A (Bodi)</span>
+                                            <span id="pulse-lini-a" class="w-3 h-3 rounded-full bg-emerald-500 live-pulse-success"></span>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-2 text-[10px]">
+                                            <button onclick="simulateToggleMachine('MCH-001')" id="mch-btn-MCH-001" class="bg-emerald-950/20 text-emerald-400 p-2 rounded border border-emerald-900/30 font-bold">MCH-001<br><span class="text-[8px] opacity-80">90% OEE</span></button>
+                                            <button onclick="simulateToggleMachine('MCH-002')" id="mch-btn-MCH-002" class="bg-emerald-950/20 text-emerald-400 p-2 rounded border border-emerald-900/30 font-bold">MCH-002<br><span class="text-[8px] opacity-80">87% OEE</span></button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Lini B -->
+                                    <div class="border border-gray-800 p-4 rounded-xl relative bg-gray-900/40">
+                                        <div class="flex justify-between items-center mb-3">
+                                            <span class="text-[10px] font-bold text-gray-400 uppercase">Lini B (Sasis)</span>
+                                            <span id="pulse-lini-b" class="w-3 h-3 rounded-full bg-emerald-500 live-pulse-success"></span>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-2 text-[10px]">
+                                            <button onclick="simulateToggleMachine('MCH-004')" id="mch-btn-MCH-004" class="bg-emerald-950/20 text-emerald-400 p-2 rounded border border-emerald-900/30 font-bold transition-all">MCH-004<br><span class="text-[8px] opacity-80">81% OEE</span></button>
+                                            <button onclick="simulateToggleMachine('MCH-005')" id="mch-btn-MCH-005" class="bg-emerald-950/20 text-emerald-400 p-2 rounded border border-emerald-900/30 font-bold">MCH-005<br><span class="text-[8px] opacity-80">85% OEE</span></button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Lini C -->
+                                    <div class="border border-gray-800 p-4 rounded-xl relative bg-gray-900/40">
+                                        <div class="flex justify-between items-center mb-3">
+                                            <span class="text-[10px] font-bold text-gray-400 uppercase">Lini C (Mesin)</span>
+                                            <span id="pulse-lini-c" class="w-3 h-3 rounded-full bg-emerald-500 live-pulse-success"></span>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-2 text-[10px]">
+                                            <button onclick="simulateToggleMachine('MCH-007')" id="mch-btn-MCH-007" class="bg-emerald-950/20 text-emerald-400 p-2 rounded border border-emerald-900/30 font-bold">MCH-007<br><span class="text-[8px] opacity-80">92% OEE</span></button>
+                                            <button onclick="simulateToggleMachine('MCH-008')" id="mch-btn-MCH-008" class="bg-emerald-950/20 text-emerald-400 p-2 rounded border border-emerald-900/30 font-bold">MCH-008<br><span class="text-[8px] opacity-80">91% OEE</span></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Live Telemetry Charts -->
+                            <div>
+                                <h4 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Real-Time SCADA Telemetry Stream</h4>
+                                <div class="relative h-48 w-full bg-[#090B11] border border-gray-800 rounded-xl p-4">
+                                    <canvas id="scada-telemetry-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Alat Pengujian Spindle Torsi Interaktif -->
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-6 flex flex-col justify-between">
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <h3 class="font-bold text-white tracking-wide uppercase text-xs">Atlas Copco Spindle Simulator</h3>
+                                    <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-900/30">OPC-UA LINK</span>
+                                </div>
+                                <p class="text-xs text-gray-400 leading-relaxed">Simulasikan pengencangan torsi pada stasiun kritis sasis secara langsung. Data akan terus diumpan masuk ke dalam pengiraan had limit SPC.</p>
+                                
+                                <div class="bg-[#090B11] p-4 rounded-xl border border-gray-800 space-y-3">
+                                    <div class="flex justify-between text-xs">
+                                        <span class="text-gray-500">Nilai Torsi Semasa</span>
+                                        <span class="font-bold text-emerald-400 font-mono" id="sim-torque-val">45.00 Nm</span>
+                                    </div>
+                                    <div class="flex justify-between text-xs">
+                                        <span class="text-gray-500">Sudut Pusingan (Angle)</span>
+                                        <span class="font-bold text-gray-300 font-mono" id="sim-angle-val">90.0°</span>
+                                    </div>
+                                    <div class="flex justify-between text-xs">
+                                        <span class="text-gray-500">Status Kelulusan</span>
+                                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-900/30" id="sim-torque-status">OK</span>
+                                    </div>
+                                </div>
+
+                                <div class="space-y-2">
+                                    <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-widest">Laraskan Variasi Torsi (Nm)</label>
+                                    <input type="range" id="spindle-torque-slider" min="40" max="50" step="0.1" value="45" oninput="updateSpindleSliderVal(this.value)" class="w-full accent-indigo-500 h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer">
+                                    <div class="flex justify-between text-[10px] text-gray-500 font-mono">
+                                        <span>40 Nm (LSL=43)</span>
+                                        <span>Sasaran: 45 Nm</span>
+                                        <span>50 Nm (USL=47)</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button onclick="triggerAssembleSpindle()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 text-xs uppercase tracking-wider mt-6">
+                                <i class="ti ti-play-card"></i> Kunci &amp; Hantar Log Torsi
+                            </button>
+                        </div>
+
+                    </div>
+                </section>
+
+                <!-- TAB 2: OEE & LOSSES -->
+                <section id="tab-oee" class="space-y-6 hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        
+                        <!-- OEE Trends -->
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-6 lg:col-span-2 space-y-4">
+                            <div>
+                                <h3 class="font-bold text-white tracking-wide uppercase text-xs">Carta Aliran Dekomposisi Efektiviti OEE (10 Hari Kerja)</h3>
+                                <p class="text-xs text-gray-500 mt-1">Dekomposisi performa terhadap Availability, Performance, dan Quality</p>
+                            </div>
+                            <div class="relative h-80 bg-[#090B11] border border-gray-800 rounded-xl p-4">
+                                <canvas id="oee-trend-chart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Six Big Losses analysis and recommendations -->
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-6 flex flex-col justify-between">
+                            <div class="space-y-4">
+                                <h3 class="font-bold text-white tracking-wide uppercase text-xs">Analisis 6 Big Losses</h3>
+                                <p class="text-xs text-gray-400 leading-relaxed">Faktor kerugian dan kehilangan jam operasional kilang PT XYZ:</p>
+                                
+                                <div class="space-y-3.5" id="six-losses-list">
+                                    <!-- Injected Dynamically -->
+                                </div>
+                            </div>
+
+                            <div class="bg-indigo-500/5 p-4 border border-indigo-500/10 rounded-xl mt-6 text-xs">
+                                <h5 class="font-bold text-indigo-400 flex items-center gap-1.5 mb-1.5 uppercase tracking-wider">
+                                    <i class="ti ti-bulb-filled text-sm"></i> Cadangan Mitigasi AI:
+                                </h5>
+                                <p class="text-gray-400 leading-relaxed">Masalah masa persediaan dan changeover acuan (stamping) Lini A menyumbang <span class="font-bold text-white">24%</span> dari total kerugian. Disarankan pelaksanaan kaedah SMED (*Single-Minute Exchange of Die*).</p>
+                            </div>
+                        </div>
+
+                    </div>
+                </section>
+
+                <!-- TAB 3: INPUT HASIL PRODUKSI (OPERATOR VIEW) -->
+                <section id="tab-produksi" class="space-y-6 hidden">
+                    <div class="max-w-2xl mx-auto bg-[#111827] border border-gray-800 rounded-2xl p-8 shadow-xl relative overflow-hidden">
+                        <div class="absolute -top-10 -left-10 w-40 h-40 bg-indigo-600/5 rounded-full blur-3xl"></div>
+                        
+                        <div class="border-b border-gray-800 pb-5 mb-6">
+                            <h3 class="font-bold text-white tracking-wide uppercase text-xs">Laporan Log Kerja &amp; Pengeluaran Operator</h3>
+                            <p class="text-xs text-gray-500 mt-1">Gunakan borang ini untuk melaporkan kuantiti aktual, sisa scrap reject, dan rekod downtime semasa peranti diimbas.</p>
+                        </div>
+
+                        <form onsubmit="submitShiftLog(event)" class="space-y-5">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Pilih Aset Mesin</label>
+                                    <select id="form-machine" class="w-full bg-[#090B11] border border-gray-800 rounded-xl px-4 py-3 text-xs text-gray-200 outline-none focus:border-indigo-500">
+                                        <!-- Dyn injected -->
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Pilih Work Order (BOM ERP)</label>
+                                    <select id="form-workorder" class="w-full bg-[#090B11] border border-gray-800 rounded-xl px-4 py-3 text-xs text-gray-200 outline-none focus:border-indigo-500" onchange="updateBOMMaterialPreview()">
+                                        <!-- Dyn injected -->
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Jumlah Output Lolos (Unit)</label>
+                                    <input type="number" id="form-qty-pass" required min="1" value="25" class="w-full bg-[#090B11] border border-gray-800 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-indigo-500 font-mono">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Jumlah Defect / Reject (Unit)</label>
+                                    <input type="number" id="form-qty-fail" required min="0" value="0" class="w-full bg-[#090B11] border border-gray-800 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-indigo-500 font-mono">
+                                </div>
+                            </div>
+
+                            <div class="bg-indigo-950/20 border border-indigo-900/30 p-4 rounded-xl space-y-2">
+                                <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wider">Anggaran Alokasi Pengurangan Bahan (BOM Backflush):</h4>
+                                <div id="bom-material-preview" class="text-xs text-gray-300 space-y-1">
+                                    <!-- Dynamic BOM preview -->
+                                </div>
+                            </div>
+
+                            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 text-xs uppercase tracking-wider mt-4">
+                                <i class="ti ti-upload-store"></i> Hantar &amp; Kemas Kini ERP SAP
+                            </button>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- TAB 4: JOB DISPATCH BOARD -->
+                <section id="tab-jobs" class="space-y-6 hidden">
+                    <div class="bg-[#111827] border border-gray-800 rounded-2xl p-6 shadow-lg">
+                        <div class="flex items-center justify-between mb-5 border-b border-gray-800 pb-4">
+                            <div>
+                                <h3 class="font-bold text-white tracking-wide uppercase text-xs">Papan Disposisi Penugasan Kerja Lini</h3>
+                                <p class="text-xs text-gray-500">Menerima aliran Work Order (WO) dari ERP SAP S/4HANA untuk dimulakan ke lantai perakitan.</p>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="border-b border-gray-800 text-gray-400 font-bold text-xs uppercase tracking-wider">
+                                        <th class="py-3 px-4">WO ID</th>
+                                        <th class="py-3 px-4">Nama Komponen</th>
+                                        <th class="py-3 px-4">Lini Target</th>
+                                        <th class="py-3 px-4 text-right">Sasaran Target</th>
+                                        <th class="py-3 px-4 text-right">Aktual Selesai</th>
+                                        <th class="py-3 px-4">Progres Lini</th>
+                                        <th class="py-3 px-4">Status Pengerjaan</th>
+                                        <th class="py-3 px-4">Aksi Operator</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="jobs-tbody" class="text-gray-300 text-xs">
+                                    <!-- Injected Dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB 4B: ERP S/4HANA GATEWAY & PROCUREMENT SIMULATOR -->
+                <section id="tab-erp" class="space-y-6 hidden">
+                    <!-- Kalkulator Perolehan Bahan & Logik Carta Alir Diskaun -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Kalkulator Diskaun Sesuai Carta Alir (Procurement Calculator) -->
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-6 space-y-4 shadow-lg flex flex-col justify-between">
+                            <div class="space-y-3">
+                                <div class="flex items-center gap-2 border-b border-gray-800 pb-3">
+                                    <div class="p-2 bg-indigo-600/10 text-indigo-400 rounded-lg">
+                                        <i class="ti ti-receipt text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-bold text-white tracking-wide uppercase text-xs">Kalkulator Pengadaan Bahan</h3>
+                                        <p class="text-[10px] text-gray-500">Sesuai Logika Flowchart Diskon PT XYZ</p>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-gray-400 leading-relaxed">Pilih bahan baku dan kuantiti untuk menguji logik diskaun bertingkat (5% &amp; 10%) secara langsung:</p>
+                                
+                                <div class="space-y-3 text-xs">
+                                    <div>
+                                        <label class="block text-gray-500 mb-1">Pilih Item Pengadaan</label>
+                                        <select id="proc-item" onchange="calculateProcurementTotal()" class="w-full bg-[#090B11] border border-gray-800 rounded-xl px-4 py-2.5 text-xs text-gray-200 outline-none focus:border-indigo-500">
+                                            <option value="1500000">Plat Baja Galvanis (Rp 1.500.000 / Ton)</option>
+                                            <option value="250000">Baut Torsi Grade 8 (Rp 250.000 / Box)</option>
+                                            <option value="1000000">Minyak Hidrolik Lini (Rp 1.000.000 / Barrel)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-gray-500 mb-1">Kuantitas Pengadaan (Qty)</label>
+                                        <input type="number" id="proc-qty" value="5" min="1" oninput="calculateProcurementTotal()" class="w-full bg-[#090B11] border border-gray-800 rounded-xl px-4 py-2.5 text-white outline-none focus:border-indigo-500 font-mono">
+                                    </div>
+
+                                    <div class="bg-[#090B11] p-3 rounded-xl border border-gray-800 space-y-2 text-xs font-mono">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">Harga Satuan:</span>
+                                            <span id="proc-unit-price" class="text-gray-300">Rp 1.500.000</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">Subtotal:</span>
+                                            <span id="proc-subtotal" class="text-gray-300">Rp 7.500.000</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500">Tingkat Diskon:</span>
+                                            <span id="proc-discount-tier" class="text-amber-400 font-bold">10% (>= 7jt)</span>
+                                        </div>
+                                        <div class="flex justify-between border-t border-gray-800 pt-2 text-sm font-bold">
+                                            <span class="text-white">Total Akhir:</span>
+                                            <span id="proc-final-total" class="text-emerald-400">Rp 6.750.000</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button onclick="triggerPrintInvoiceSim()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2">
+                                <i class="ti ti-printer"></i> Cetak Total Biaya (Print)
+                            </button>
+                        </div>
+
+                        <!-- Live REST Payload Viewer -->
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-6 lg:col-span-2 space-y-4 shadow-lg flex flex-col justify-between">
+                            <div>
+                                <h3 class="font-bold text-white tracking-wide uppercase text-xs mb-1">Struktur Log JSON RFC SAP Backflush</h3>
+                                <p class="text-xs text-gray-500">Data mentah JSON yang diunggah secara automatik ke sistem ERP pusat semasa operator menekan butang hantar laporan:</p>
+                            </div>
+
+                            <div class="bg-[#090B11] border border-gray-800 p-4 rounded-xl font-mono text-xs text-indigo-300 overflow-x-auto min-h-[200px]">
+                                <pre id="erp-payload-json">// Input data log kerja di tab sebelah untuk melihat payload JSON real-time di sini...</pre>
+                            </div>
+
+                            <div class="text-[10px] text-gray-500 border-t border-gray-800 pt-3 flex justify-between">
+                                <span>* Mengelakkan percanggahan baki bahan antara pembukuan logistik dan realiti lantai kilang.</span>
+                                <div class="flex gap-2">
+                                    <button onclick="triggerSAPMockSync('pull')" class="text-indigo-400 font-bold hover:underline">Tarik WO SAP</button> |
+                                    <button onclick="triggerSAPMockSync('push')" class="text-indigo-400 font-bold hover:underline">Push Backflush</button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </section>
+
+                <!-- TAB 5: GENEALOGY (TRACEABILITY) -->
+                <section id="tab-traceability" class="space-y-6 hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        
+                        <!-- Search Sidebar -->
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-6 space-y-5 shadow-lg">
+                            <h3 class="font-bold text-white tracking-wide uppercase text-xs">Passport Identiti Digital Produk</h3>
+                            <p class="text-xs text-gray-400 leading-relaxed">Masukkan kod nomor seri sasis/kap depan untuk melacak silsilah pemasangan bahagian, rekod torsi bolt pengetat, andon kegagalan, dan nama operator.</p>
+                            
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Nomor Seri Sasis (SN)</label>
+                                    <div class="flex gap-2">
+                                        <input type="text" id="genealogy-search-box" class="flex-1 bg-[#090B11] border border-gray-800 rounded-xl px-4 py-3 text-xs font-mono text-white outline-none focus:border-indigo-500" value="SN-9082-A3">
+                                        <button onclick="performGenealogyQuery()" class="px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all uppercase tracking-wider">
+                                            <i class="ti ti-search"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="text-[11px] text-gray-500 space-y-1">
+                                    <p>Contoh barcode terdaftar di kilang:</p>
+                                    <div class="flex gap-2">
+                                        <button onclick="fillSearchGenealogy('SN-9082-A3')" class="px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded text-[10px] font-mono text-indigo-400">SN-9082-A3</button>
+                                        <button onclick="fillSearchGenealogy('SN-7110-B4')" class="px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded text-[10px] font-mono text-indigo-400">SN-7110-B4</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tree output -->
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-6 lg:col-span-2 space-y-4 shadow-lg">
+                            <h3 class="font-bold text-white tracking-wide uppercase text-xs border-b border-gray-800 pb-3">Silsilah Perakitan &amp; Log Torsi Baut</h3>
+                            
+                            <div id="genealogy-tree-box" class="p-4 bg-[#090B11] border border-gray-800 rounded-xl min-h-[300px]">
+                                <!-- Dyn rendered search output -->
+                                <div class="text-center py-20 text-gray-500">
+                                    <i class="ti ti-id-badge text-4xl block mb-2"></i>
+                                    Masukkan nomor seri di panel kiri untuk memulai pelacakan histori produksi.
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </section>
+
+                <!-- TAB 6: SPC STATISTICAL LIVE TAB -->
+                <section id="tab-spc" class="space-y-6 hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        
+                        <!-- Control Chart Plot -->
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-6 lg:col-span-2 space-y-4 shadow-lg">
+                            <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                                <div>
+                                    <h3 class="font-bold text-white tracking-wide uppercase text-xs">SPC Live Control Chart</h3>
+                                    <p class="text-xs text-gray-500">Kalkulasi Torsi Pengencangan Baut Atlas Copco (Spindle Sasaran: 45 Nm &plusmn; 2 Nm)</p>
+                                </div>
+                                <span class="bg-indigo-500/10 text-indigo-400 text-[9px] font-bold px-2 py-1 rounded-full border border-indigo-900/30 uppercase">UCL/LCL Limits</span>
+                            </div>
+                            <div class="relative h-80 bg-[#090B11] border border-gray-800 rounded-xl p-4">
+                                <canvas id="spc-control-chart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- SPC Mathematical Aggregates -->
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-6 flex flex-col justify-between shadow-lg">
+                            <div class="space-y-4">
+                                <h3 class="font-bold text-white tracking-wide uppercase text-xs border-b border-gray-800 pb-3">Statistika Kapabilitas Proses (Cp &amp; Cpk)</h3>
+                                
+                                <div class="space-y-3 font-mono text-xs">
+                                    <div class="flex justify-between p-2.5 bg-gray-900/50 rounded-lg border border-gray-800">
+                                        <span class="text-gray-500">Batas Spesifikasi Atas (USL)</span>
+                                        <span class="font-bold text-rose-400">47.00 Nm</span>
+                                    </div>
+                                    <div class="flex justify-between p-2.5 bg-gray-900/50 rounded-lg border border-gray-800">
+                                        <span class="text-gray-500">Batas Spesifikasi Bawah (LSL)</span>
+                                        <span class="font-bold text-rose-400">43.00 Nm</span>
+                                    </div>
+                                    <div class="flex justify-between p-2.5 bg-gray-900/50 rounded-lg border border-gray-800">
+                                        <span class="text-gray-500">Nilai Rata-rata (&mu;)</span>
+                                        <span id="spc-calc-mean" class="font-bold text-emerald-400 font-bold">45.01 Nm</span>
+                                    </div>
+                                    <div class="flex justify-between p-2.5 bg-gray-900/50 rounded-lg border border-gray-800">
+                                        <span class="text-gray-500">Simpangan Baku (&sigma;)</span>
+                                        <span id="spc-calc-stddev" class="font-bold text-indigo-400">0.47 Nm</span>
+                                    </div>
+                                    <div class="flex justify-between p-2.5 bg-gray-900/50 rounded-lg border border-gray-800">
+                                        <span class="text-gray-500">Indeks Kapabilitas Proses (Cpk)</span>
+                                        <span id="spc-calc-cpk" class="font-bold text-emerald-400 font-bold">1.41 (Sangat Baik)</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-xl mt-6 text-xs text-emerald-400">
+                                <h5 class="font-bold uppercase tracking-wider flex items-center gap-1 mb-1">
+                                    <i class="ti ti-shield-check"></i> Had Toleransi Selamat:
+                                </h5>
+                                <p class="leading-relaxed">Nilai $Cpk > 1.33$ membuktikan ketepatan robot/spindle berada dalam kawalan had selamat statistika.</p>
+                            </div>
+                        </div>
+
+                    </div>
+                </section>
+
+                <!-- TAB 7: CMMS MAINTENANCE TICKETING -->
+                <section id="tab-cmms" class="space-y-6 hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        
+                        <!-- CMMS Ticket List -->
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-6 lg:col-span-2 space-y-4 shadow-lg">
+                            <h3 class="font-bold text-white tracking-wide uppercase text-xs">Daftar Tiket Perbaikan CMMS</h3>
+                            
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr class="border-b border-gray-800 text-gray-400 font-bold text-xs uppercase tracking-wider">
+                                            <th class="py-3 px-4">Ticket ID</th>
+                                            <th class="py-3 px-4">Mesin Terkait</th>
+                                            <th class="py-3 px-4">Deskripsi Gangguan</th>
+                                            <th class="py-3 px-4">Tingkat Urgensi</th>
+                                            <th class="py-3 px-4">Petugas</th>
+                                            <th class="py-3 px-4">Status Kerja</th>
+                                            <th class="py-3 px-4">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="cmms-tbody" class="text-gray-300 text-xs">
+                                        <!-- Dyn Injected -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- CMMS Ticket Creation -->
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-6 space-y-4 shadow-lg">
+                            <h3 class="font-bold text-white tracking-wide uppercase text-xs">Buka Tiket Kerusakan Baru</h3>
+                            
+                            <form onsubmit="submitCMMSTicket(event)" class="space-y-4 text-xs">
+                                <div>
+                                    <label class="block text-gray-400 font-bold uppercase tracking-wider mb-1.5">Pilih Mesin Bermasalah</label>
+                                    <select id="cmms-form-mach" class="w-full bg-[#090B11] border border-gray-800 rounded-xl px-4 py-3 text-gray-200 outline-none focus:border-indigo-500">
+                                        <!-- Dyn -->
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-gray-400 font-bold uppercase tracking-wider mb-1.5">Skala Prioritas</label>
+                                    <select id="cmms-form-priority" class="w-full bg-[#090B11] border border-gray-800 rounded-xl px-4 py-3 text-gray-200 outline-none focus:border-indigo-500">
+                                        <option value="Tinggi">Tinggi (Menahan Output Lini)</option>
+                                        <option value="Sedang">Sedang (Anomali Kerja Non-Fatal)</option>
+                                        <option value="Rendah">Rendah (Hanya Kalibrasi Ringan)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-gray-400 font-bold uppercase tracking-wider mb-1.5">Deskripsi Detail Masalah / Anomali</label>
+                                    <textarea id="cmms-form-desc" rows="3" required class="w-full bg-[#090B11] border border-gray-800 rounded-xl px-4 py-3 text-white outline-none focus:border-indigo-500" placeholder="Contoh: Sensor overload membaca deviasi getaran spindle di luar normal..."></textarea>
+                                </div>
+                                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 text-xs uppercase tracking-wider">
+                                    <i class="ti ti-ticket"></i> Kirim Tiket Ke Tim Mekanik
+                                </button>
+                            </form>
+                        </div>
+
+                    </div>
+                </section>
+
+                <!-- TAB 7B: DATABASE SCHEMA & DDL EXPLORER (PPTX RECONCILIATION) -->
+                <section id="tab-database" class="space-y-6 hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- ERD Interactive Visual Map (6 Entitas) -->
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-6 lg:col-span-2 space-y-4 shadow-lg">
+                            <h3 class="font-bold text-white tracking-wide uppercase text-xs border-b border-gray-800 pb-3">Data Model Konseptual (ERD 6 Entitas)</h3>
+                            <p class="text-xs text-gray-500">Pemetaan relasi struktur database MES PT XYZ berdasarkan laporan rancangan Kelompok 2:</p>
+                            
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-3 pt-2 text-xs">
+                                <div class="p-3 bg-[#090B11] border border-gray-800 rounded-xl space-y-2">
+                                    <span class="font-bold text-indigo-400 font-mono text-[10px]">1. users</span>
+                                    <p class="text-gray-400 text-[10px] leading-relaxed">user_id (PK)<br>name, email (UQ)<br>role, is_active</p>
+                                </div>
+                                <div class="p-3 bg-[#090B11] border border-gray-800 rounded-xl space-y-2">
+                                    <span class="font-bold text-indigo-400 font-mono text-[10px]">2. production_orders</span>
+                                    <p class="text-gray-400 text-[10px] leading-relaxed">order_id (PK)<br>product_name<br>target_qty, status, shift</p>
+                                </div>
+                                <div class="p-3 bg-[#090B11] border border-gray-800 rounded-xl space-y-2">
+                                    <span class="font-bold text-indigo-400 font-mono text-[10px]">3. machines</span>
+                                    <p class="text-gray-400 text-[10px] leading-relaxed">machine_id (PK)<br>machine_code (UQ)<br>status, location</p>
+                                </div>
+                                <div class="p-3 bg-[#090B11] border border-gray-800 rounded-xl space-y-2">
+                                    <span class="font-bold text-indigo-400 font-mono text-[10px]">4. production_records</span>
+                                    <p class="text-gray-400 text-[10px] leading-relaxed">record_id (PK)<br>order_id (FK), machine_id (FK)<br>actual_qty, defect_qty</p>
+                                </div>
+                                <div class="p-3 bg-[#090B11] border border-gray-800 rounded-xl space-y-2">
+                                    <span class="font-bold text-indigo-400 font-mono text-[10px]">5. quality_inspections</span>
+                                    <p class="text-gray-400 text-[10px] leading-relaxed">insp_id (PK)<br>record_id (FK/UQ)<br>inspected_qty, pass_qty</p>
+                                </div>
+                                <div class="p-3 bg-[#090B11] border border-gray-800 rounded-xl space-y-2">
+                                    <span class="font-bold text-indigo-400 font-mono text-[10px]">6. notifications</span>
+                                    <p class="text-gray-400 text-[10px] leading-relaxed">notif_id (PK)<br>user_id (FK)<br>type, message, is_read</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- DDL Copy Board -->
+                        <div class="bg-[#111827] border border-gray-800 rounded-2xl p-6 space-y-4 shadow-lg flex flex-col justify-between">
+                            <div>
+                                <h3 class="font-bold text-white tracking-wide uppercase text-xs mb-1">Skema DDL Fisikal MySQL</h3>
+                                <p class="text-xs text-gray-500">Kod skema struktur DDL sedia dilaksanakan:</p>
+                            </div>
+
+                            <div class="bg-[#090B11] border border-gray-800 p-3 rounded-xl font-mono text-[10px] text-indigo-300 overflow-x-auto min-h-[180px]">
+                                <pre>
+CREATE TABLE production_records (
+  record_id INT AUTO_INCREMENT PRIMARY KEY,
+  order_id INT NOT NULL,
+  machine_id INT NOT NULL,
+  shift ENUM('pagi','siang','malam'),
+  actual_qty INT DEFAULT 0,
+  defect_qty INT DEFAULT 0,
+  recorded_by INT NOT NULL,
+  FOREIGN KEY (order_id)
+    REFERENCES production_orders(order_id),
+  FOREIGN KEY (machine_id)
+    REFERENCES machines(machine_id)
+) ENGINE=InnoDB;</pre>
+                            </div>
+
+                            <button onclick="showToast('Skema DDL disalin!', 'info')" class="w-full py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-xl text-xs uppercase border border-gray-700">
+                                Salin Skema Database
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB 8: SECURITY RBAC MATRIX (ADMIN CONTROL) -->
+                <section id="tab-rbac" class="space-y-6 hidden">
+                    <div class="bg-[#111827] border border-gray-800 rounded-2xl p-6 shadow-lg">
+                        <div class="border-b border-gray-800 pb-4 mb-5">
+                            <h3 class="font-bold text-white tracking-wide uppercase text-xs">Kebijakan Kontrol Hak Akses Berbasis Peran (RBAC)</h3>
+                            <p class="text-xs text-gray-500 mt-1">Konfigurasi batasan fungsional MES secara dinamis untuk masing-masing peran di pabrik.</p>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="border-b border-gray-800 text-gray-400 font-bold text-xs uppercase tracking-wider">
+                                        <th class="py-3.5 px-4">Nama Modul MES</th>
+                                        <th class="py-3.5 px-4 text-center">Operator Shift</th>
+                                        <th class="py-3.5 px-4 text-center">Supervisor Lini</th>
+                                        <th class="py-3.5 px-4 text-center">Plant Manager</th>
+                                        <th class="py-3.5 px-4 text-center">IT / OT Admin</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rbac-tbody" class="text-gray-300 text-xs">
+                                    <!-- Injected Dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="flex items-center justify-between border-t border-gray-800 pt-5 mt-5">
+                            <p class="text-[11px] text-gray-500">* Admin IT / OT memegang kendali atas manajemen otorisasi sistem demi mengamankan konvergensi IT/OT.</p>
+                            <div class="flex gap-2">
+                                <button onclick="resetRBACDefault()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all border border-gray-700">
+                                    Reset Default
+                                </button>
+                                <button onclick="applyAndSaveRBAC()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all">
+                                    Simpan Konfigurasi
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- TOAST OVERLAY ELEMENT -->
+    <div id="toast-overlay" class="fixed bottom-6 right-6 z-[2000] flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- DIALOG PERTUKARAN PERAN (MODAL) -->
+    <div id="role-modal" class="fixed inset-0 z-[1100] hidden flex items-center justify-center bg-slate-950/80 backdrop-blur-sm px-4">
+        <div class="bg-[#111827] border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider mb-4 border-b border-gray-800 pb-3">Ganti Peran Otoritas Kerja</h3>
+            
+            <div class="space-y-2 mb-5">
+                <button onclick="changeRoleDirectly('Operator')" class="w-full p-3 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 text-left text-xs font-semibold flex items-center gap-2">
+                    <i class="ti ti-user-cog text-indigo-400"></i> Operator Lini
+                </button>
+                <button onclick="changeRoleDirectly('Supervisor')" class="w-full p-3 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 text-left text-xs font-semibold flex items-center gap-2">
+                    <i class="ti ti-shield text-indigo-400"></i> Supervisor Lini
+                </button>
+                <button onclick="changeRoleDirectly('Manajer')" class="w-full p-3 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 text-left text-xs font-semibold flex items-center gap-2">
+                    <i class="ti ti-presentation-analytics text-indigo-400"></i> Manajer Kilang
+                </button>
+                <button onclick="changeRoleDirectly('IT Admin')" class="w-full p-3 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 text-left text-xs font-semibold flex items-center gap-2">
+                    <i class="ti ti-shield-lock text-indigo-400"></i> IT / OT Admin
+                </button>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <button onclick="closeRoleModal()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider">
+                    Batal
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT: LOGIK INTERAKTIF UTAMA -->
+    <script>
+        // Core state configurations
+        let appState = {
+            currentUserRole: 'Operator',
+            currentUserName: 'Budi Santoso',
+            activeTab: 'dashboard',
+            spindleSelectedTorque: 45.0,
+            isAndonAlarmActive: false
+        };
+
+        // Static Master Database
+        const MACHINES_DB = [
+            { id: 'MCH-001', line: 'Lini A - Bodi', type: 'Stamping Press', status: 'running', oee: 89.4, output: 410, operator: 'Andi S.' },
+            { id: 'MCH-002', line: 'Lini A - Bodi', type: 'Laser Cutter', status: 'running', oee: 87.2, output: 395, operator: 'Agus T.' },
+            { id: 'MCH-004', line: 'Lini B - Sasis', type: 'Hydraulic Press', status: 'running', oee: 81.5, output: 280, operator: 'Budi S.' },
+            { id: 'MCH-005', line: 'Lini B - Sasis', type: 'Arc Welder Robot', status: 'running', oee: 85.9, output: 264, operator: 'Hendra L.' },
+            { id: 'MCH-007', line: 'Lini C - Mesin', type: 'Dyno Bench', status: 'running', oee: 92.4, output: 334, operator: 'Siti R.' },
+            { id: 'MCH-008', line: 'Lini C - Mesin', type: 'Leak Tester', status: 'running', oee: 91.1, output: 308, operator: 'Toni K.' }
+        ];
+
+        const WORKORDERS_DB = [
+            { id: 'PO-2026-001', product: 'Pintu Baja Samping Depan', target: 500, actual: 410, line: 'Lini A', status: 'running' },
+            { id: 'PO-2026-002', product: 'Rangka Atap Alumunium', target: 300, actual: 300, line: 'Lini A', status: 'completed' },
+            { id: 'PO-2026-003', product: 'Chassis Utama SUV X7', target: 400, actual: 280, line: 'Lini B', status: 'running' },
+            { id: 'PO-2026-004', product: 'Mesin Gamma II 1.5 MPI', target: 200, actual: 200, line: 'Lini C', status: 'completed' },
+            { id: 'PO-2026-005', product: 'Poros Roda Depan Kanan', target: 300, actual: 0, line: 'Lini B', status: 'planned' }
+        ];
+
+        const ERP_MATERIALS_BOM = [
+            { id: 'MAT-ST-01', name: 'Plat Baja Galvanis (Coil)', erpStock: '42.5 Ton', reqUnit: '0.08 Ton', totalUsed: '32.8 Ton' },
+            { id: 'MAT-AL-02', name: 'Sasis Alumunium SUV', erpStock: '142 Pcs', reqUnit: '1 Pcs', totalUsed: '280 Pcs' },
+            { id: 'MAT-BL-12', name: 'Baut Torsi Grade 8 (M12)', erpStock: '14,200 Pcs', reqUnit: '16 Pcs', totalUsed: '4,480 Pcs' }
+        ];
+
+        const SIX_LOSSES_DB = [
+            { name: 'Equipment Failure (Breakdown)', pct: 18, color: 'bg-rose-500' },
+            { name: 'Setup & Adjustments (Changeover)', pct: 24, color: 'bg-amber-500' },
+            { name: 'Idling & Minor Stoppages', pct: 14, color: 'bg-yellow-400' },
+            { name: 'Reduced Speed (Speed Losses)', pct: 15, color: 'bg-indigo-500' },
+            { name: 'Process Defects (Scrap/Reject)', pct: 12, color: 'bg-purple-500' },
+            { name: 'Startup Loss (Reduced Yield)', pct: 8, color: 'bg-gray-500' }
+        ];
+
+        const PRODUCT_GENEALOGY_DB = {
+            'SN-9082-A3': {
+                product: 'Kap Depan Sedan Model X',
+                timestamp: '06-Jun-2026 09:12:30',
+                station: 'MCH-001 (Stamping Press)',
+                operator: 'Andi Santoso',
+                testResult: 'Pass (SPC Checked)',
+                batchMaterial: 'Coil Steel Batch #CS-8812A',
+                torqueValues: [
+                    { joint: 'Baut Engsel Kiri', torque: '45.1 Nm', angle: '90.2°', status: 'OK' },
+                    { joint: 'Baut Engsel Kanan', torque: '44.8 Nm', angle: '89.4°', status: 'OK' }
+                ],
+                linkedParts: ['Pintu Depan (LOT-9082-1)', 'Kap Mesin (LOT-9082-2)']
+            },
+            'SN-7110-B4': {
+                product: 'Chassis Utama SUV X7',
+                timestamp: '06-Jun-2026 10:45:12',
+                station: 'MCH-004 (Hydraulic Press)',
+                operator: 'Budi Santoso',
+                testResult: 'Pass (Acoustic Ok)',
+                batchMaterial: 'Aluminium Plate Batch #AL-9930',
+                torqueValues: [
+                    { joint: 'Baut Subframe Depan #1', torque: '46.2 Nm', angle: '91.8°', status: 'OK' },
+                    { joint: 'Baut Subframe Depan #2', torque: '45.0 Nm', angle: '90.0°', status: 'OK' },
+                    { joint: 'Baut Stabilizer Utama', torque: '44.3 Nm', angle: '88.1°', status: 'OK' }
+                ],
+                linkedParts: ['Poros Roda Depan (LOT-7110-1)', 'Sasis Belakang (LOT-7110-2)']
+            }
+        };
+
+        let runtimeCMMS = [
+            { id: 'TKT-9201', mach: 'MCH-004', desc: 'Overheating sensor oli motor hydraulic', priority: 'Tinggi', assignee: 'Roni H.', status: 'Dalam Perbaikan' },
+            { id: 'TKT-9202', mach: 'MCH-002', desc: 'Kalibrasi optik sensor kepala laser cutter', priority: 'Sedang', assignee: 'Slamet T.', status: 'Selesai' }
+        ];
+
+        // RBAC dynamic matrices
+        let activeRBACMatrix = {
+            'Operator':   { dashboard: true,  oee: false, produksi: true,  jobs: true,  erp: true,  traceability: true,  spc: true,  cmms: false, database: false, rbac: false },
+            'Supervisor': { dashboard: true,  oee: true,  produksi: true,  jobs: true,  erp: true,  traceability: true,  spc: true,  cmms: true,  database: true,  rbac: false },
+            'Manajer':    { dashboard: true,  oee: true,  produksi: false, jobs: true,  erp: true,  traceability: true,  spc: true,  cmms: true,  database: true,  rbac: false },
+            'IT Admin':   { dashboard: true,  oee: true,  produksi: true,  jobs: true,  erp: true,  traceability: true,  spc: true,  cmms: true,  database: true,  rbac: true  }
+        };
+
+        const TAB_METADATA = [
+            { id: 'dashboard', name: 'ANDON / SCADA Screen' },
+            { id: 'oee', name: 'OEE & Losses Tree' },
+            { id: 'produksi', name: 'Input Log Kerja' },
+            { id: 'jobs', name: 'Job Dispatch Board' },
+            { id: 'erp', name: 'ERP Integration Gateway' },
+            { id: 'traceability', name: 'Genealogy Tracking' },
+            { id: 'spc', name: 'SPC Live Control' },
+            { id: 'cmms', name: 'CMMS Maintenance' },
+            { id: 'database', name: 'Skema DB & DDL' },
+            { id: 'rbac', name: 'Keamanan RBAC' }
+        ];
+
+        let spcTorqueSamples = [45.01, 44.95, 45.15, 44.88, 46.22, 43.75, 45.08, 45.02];
+
+        // Chart references
+        let scadaChartRef = null;
+        let oeeChartRef = null;
+        let spcChartRef = null;
+        let audioContext = null;
+
+        function triggerBeepAlert(frequency = 880, duration = 0.15, type = 'sine') {
+            try {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                const osc = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                osc.type = type;
+                osc.frequency.value = frequency;
+                
+                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+                
+                osc.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                osc.start();
+                osc.stop(audioContext.currentTime + duration);
+            } catch (e) {
+                console.log('AudioContext uninitialized: ', e);
+            }
+        }
+
+        // Logic Perolehan Bahan Baku Sesuai Carta Aliran
+        function calculateProcurementTotal() {
+            const itemPrice = parseFloat(document.getElementById('proc-item').value);
+            const qty = parseInt(document.getElementById('proc-qty').value) || 0;
+
+            const subtotal = itemPrice * qty;
+            let discountPercent = 0;
+            let discountTierText = '0% (Subtotal < 3.5Jt)';
+
+            // LOGIC FLOWCHART
+            if (subtotal >= 7000000) {
+                discountPercent = 0.10;
+                discountTierText = '10% (Subtotal >= 7Jt)';
+            } else if (subtotal > 3500000) {
+                discountPercent = 0.05;
+                discountTierText = '5% (Subtotal > 3.5Jt)';
+            }
+
+            const discountAmount = subtotal * discountPercent;
+            const finalTotal = subtotal - discountAmount;
+
+            // Update UI
+            document.getElementById('proc-unit-price').textContent = `Rp ${itemPrice.toLocaleString('id-ID')}`;
+            document.getElementById('proc-subtotal').textContent = `Rp ${subtotal.toLocaleString('id-ID')}`;
+            document.getElementById('proc-discount-tier').textContent = discountTierText;
+            document.getElementById('proc-final-total').textContent = `Rp ${finalTotal.toLocaleString('id-ID')}`;
+
+            return { subtotal, discountPercent, finalTotal, qty };
+        }
+
+        function triggerPrintInvoiceSim() {
+            const data = calculateProcurementTotal();
+            triggerBeepAlert(1200, 0.15);
+            showToast(`Mencetak invois... Total Akhir: Rp ${data.finalTotal.toLocaleString('id-ID')} dengan diskaun ${data.discountPercent * 100}%`, 'success');
+        }
+
+        function recalculateSPCStats() {
+            const sum = spcTorqueSamples.reduce((a, b) => a + b, 0);
+            const mean = sum / spcTorqueSamples.length;
+            
+            const variance = spcTorqueSamples.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (spcTorqueSamples.length - 1);
+            const stdDev = Math.sqrt(variance);
+
+            const USL = 47.0;
+            const LSL = 43.0;
+
+            const cpu = (USL - mean) / (3 * stdDev);
+            const cpl = (mean - LSL) / (3 * stdDev);
+            const cpk = Math.min(cpu, cpl);
+
+            document.getElementById('spc-calc-mean').textContent = `${mean.toFixed(2)} Nm`;
+            document.getElementById('spc-calc-stddev').textContent = `${stdDev.toFixed(3)} Nm`;
+            
+            let evaluation = 'Sangat Baik';
+            if (cpk < 1.0) {
+                evaluation = 'Buruk (Tindakan Diperlukan)';
+            } else if (cpk < 1.33) {
+                evaluation = 'Sedang (Monitor Rapat)';
+            }
+
+            document.getElementById('spc-calc-cpk').textContent = `${cpk.toFixed(2)} (${evaluation})`;
+            document.getElementById('dashboard-kpi-cpk').textContent = cpk.toFixed(2);
+        }
+
+        // Login operations
+        function selectRole(role) {
+            const btns = document.querySelectorAll('.role-btn');
+            btns.forEach(btn => {
+                btn.classList.remove('border-indigo-600', 'bg-indigo-950/20', 'text-indigo-400');
+                btn.classList.add('border-gray-800', 'text-gray-400');
+            });
+
+            const target = window.event.currentTarget;
+            target.classList.remove('border-gray-800', 'text-gray-400');
+            target.classList.add('border-indigo-600', 'bg-indigo-950/20', 'text-indigo-400');
+            
+            appState.currentUserRole = role;
+        }
+
+        function performLogin() {
+            appState.currentUserRole = appState.currentUserRole || 'Operator';
+            const passcode = document.getElementById('login-passcode').value;
+
+            if (passcode !== '123456') {
+                showToast('Kode Passcode salah! Gunakan passcode default "123456"', 'error');
+                return;
+            }
+
+            if (appState.currentUserRole === 'Operator') {
+                appState.currentUserName = 'Budi Santoso';
+            } else if (appState.currentUserRole === 'Supervisor') {
+                appState.currentUserName = 'Dika Saputra';
+            } else if (appState.currentUserRole === 'Manajer') {
+                appState.currentUserName = 'Ir. Agus Wijaya';
+            } else {
+                appState.currentUserName = 'Admin OT-XYZ';
+            }
+
+            document.getElementById('user-display-name').textContent = appState.currentUserName;
+            document.getElementById('user-display-role').textContent = appState.currentUserRole;
+            document.getElementById('user-initials').textContent = appState.currentUserName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+            document.getElementById('login-overlay').classList.add('hidden');
+            document.getElementById('main-workspace').classList.remove('hidden');
+
+            triggerBeepAlert(1000, 0.25);
+            showToast(`Log masuk berjaya! Peranan: ${appState.currentUserRole}`, 'success');
+
+            enforceRBACSafetyView();
+            switchTab('dashboard');
+            populateSelectors();
+            renderCMMS();
+            renderJobsBoard();
+            renderSixLosses();
+            recalculateSPCStats();
+            calculateProcurementTotal();
+        }
+
+        function performLogout() {
+            document.getElementById('main-workspace').classList.add('hidden');
+            document.getElementById('login-overlay').classList.remove('hidden');
+            showToast('Anda telah log keluar dari pusat kawalan MES.', 'info');
+        }
+
+        function showRoleModal() {
+            document.getElementById('role-modal').classList.remove('hidden');
+        }
+
+        function closeRoleModal() {
+            document.getElementById('role-modal').classList.add('hidden');
+        }
+
+        function changeRoleDirectly(role) {
+            appState.currentUserRole = role;
+            closeRoleModal();
+
+            if (role === 'Operator') {
+                appState.currentUserName = 'Budi Santoso';
+            } else if (role === 'Supervisor') {
+                appState.currentUserName = 'Dika Saputra';
+            } else if (role === 'Manajer') {
+                appState.currentUserName = 'Ir. Agus Wijaya';
+            } else {
+                appState.currentUserName = 'Admin OT-XYZ';
+            }
+
+            document.getElementById('user-display-name').textContent = appState.currentUserName;
+            document.getElementById('user-display-role').textContent = appState.currentUserRole;
+            document.getElementById('user-initials').textContent = appState.currentUserName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+            triggerBeepAlert(700, 0.2);
+            showToast(`Menukar peranan kepada ${appState.currentUserRole}`, 'info');
+
+            enforceRBACSafetyView();
+            switchTab('dashboard');
+        }
+
+        function enforceRBACSafetyView() {
+            TAB_METADATA.forEach(tab => {
+                const navBtn = document.getElementById(`tab-btn-${tab.id}`);
+                const hasAccess = activeRBACMatrix[appState.currentUserRole][tab.id];
+                if (navBtn) {
+                    if (hasAccess) {
+                        navBtn.classList.remove('hidden');
+                    } else {
+                        navBtn.classList.add('hidden');
+                    }
+                }
+            });
+        }
+
+        function switchTab(tabId) {
+            const hasAccess = activeRBACMatrix[appState.currentUserRole][tabId];
+            
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-indigo-600/10', 'text-indigo-400', 'border-l-4', 'border-indigo-500');
+            });
+
+            const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+            if (activeBtn) {
+                activeBtn.classList.add('bg-indigo-600/10', 'text-indigo-400', 'border-l-4', 'border-indigo-500');
+            }
+
+            document.querySelectorAll('#main-workspace main section').forEach(sect => {
+                sect.classList.add('hidden');
+            });
+
+            const targetSection = document.getElementById(`tab-${tabId}`);
+            const targetMeta = TAB_METADATA.find(t => t.id === tabId);
+
+            document.getElementById('workspace-header-title').innerHTML = `
+                <i class="ti ${getTabIcon(tabId)} text-indigo-500 text-lg mr-2"></i>
+                ${targetMeta ? targetMeta.name : 'Console'}
+            `;
+
+            if (!hasAccess) {
+                if (targetSection) {
+                    targetSection.classList.remove('hidden');
+                    targetSection.innerHTML = `
+                        <div class="flex flex-col items-center justify-center min-h-[400px] text-center max-w-lg mx-auto">
+                            <div class="p-4 bg-rose-500/10 text-rose-500 rounded-full mb-4 border border-rose-500/20">
+                                <i class="ti ti-shield-lock text-4xl animate-pulse"></i>
+                            </div>
+                            <h3 class="text-base font-bold text-white uppercase tracking-wider">Akses Terhad (Zero Trust)</h3>
+                            <p class="text-xs text-gray-400 mt-2 leading-relaxed">Peranan kerja semasa anda (*${appState.currentUserRole}*) tidak dibenarkan mengakses modul ini demi keselamatan penyelarasan sistem.</p>
+                            <button onclick="switchTab('dashboard')" class="mt-6 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all">
+                                Kembali ke ANDON
+                            </button>
+                        </div>
+                    `;
+                }
+                return;
+            }
+
+            if (targetSection) {
+                targetSection.classList.remove('hidden');
+            }
+
+            appState.activeTab = tabId;
+            renderActiveTabComponents();
+        }
+
+        function getTabIcon(tabId) {
+            switch(tabId) {
+                case 'dashboard': return 'ti-layout-dashboard';
+                case 'oee': return 'ti-chart-dots';
+                case 'produksi': return 'ti-file-analytics';
+                case 'jobs': return 'ti-list-check';
+                case 'erp': return 'ti-api';
+                case 'traceability': return 'ti-route';
+                case 'spc': return 'ti-chart-histogram';
+                case 'cmms': return 'ti-tool';
+                case 'database': return 'ti-database';
+                case 'rbac': return 'ti-shield-lock';
+                default: return 'ti-adjustments-alt';
+            }
+        }
+
+        function renderActiveTabComponents() {
+            if (appState.activeTab === 'dashboard') {
+                buildSCADALiveChart();
+            } else if (appState.activeTab === 'oee') {
+                buildOEETrendChart();
+            } else if (appState.activeTab === 'spc') {
+                buildSPCOutputChart();
+            } else if (appState.activeTab === 'rbac') {
+                renderRBACMatrixConfigTable();
+            }
+        }
+
+        function populateSelectors() {
+            const formMach = document.getElementById('form-machine');
+            const formWO = document.getElementById('form-workorder');
+            const cmmsMach = document.getElementById('cmms-form-mach');
+
+            if (formMach) {
+                formMach.innerHTML = MACHINES_DB.map(m => `<option value="${m.id}">${m.id} &mdash; ${m.type} (${m.line})</option>`).join('');
+            }
+            if (formWO) {
+                formWO.innerHTML = WORKORDERS_DB.filter(w => w.status === 'running').map(w => `<option value="${w.id}">${w.id} &mdash; ${w.product}</option>`).join('');
+            }
+            if (cmmsMach) {
+                cmmsMach.innerHTML = MACHINES_DB.map(m => `<option value="${m.id}">${m.id} &mdash; ${m.type}</option>`).join('');
+            }
+
+            updateBOMMaterialPreview();
+        }
+
+        function updateSpindleSliderVal(val) {
+            document.getElementById('sim-torque-val').textContent = `${parseFloat(val).toFixed(2)} Nm`;
+            
+            const isOk = val >= 43.0 && val <= 47.0;
+            const statusEl = document.getElementById('sim-torque-status');
+            
+            if (isOk) {
+                statusEl.textContent = 'OK';
+                statusEl.className = 'px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-900/30';
+            } else {
+                statusEl.textContent = 'NG (NOT GOOD)';
+                statusEl.className = 'px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30 animate-pulse';
+            }
+        }
+
+        function triggerAssembleSpindle() {
+            const sliderVal = parseFloat(document.getElementById('spindle-torque-slider').value);
+            
+            spcTorqueSamples.push(sliderVal);
+            if (spcTorqueSamples.length > 8) {
+                spcTorqueSamples.shift();
+            }
+
+            recalculateSPCStats();
+            
+            const isOk = sliderVal >= 43.0 && sliderVal <= 47.0;
+            if (isOk) {
+                triggerBeepAlert(1100, 0.1);
+                showToast(`Log pengetatan baut selamat: ${sliderVal.toFixed(2)} Nm (Status: OK)`, 'success');
+            } else {
+                triggerBeepAlert(220, 0.4, 'sawtooth');
+                showToast(`Kecacatan dikesan: Torsi pengencangan ${sliderVal.toFixed(2)} Nm di luar spesifikasi! (Status: NG)`, 'error');
+            }
+
+            if (appState.activeTab === 'dashboard') {
+                buildSCADALiveChart();
+            }
+        }
+
+        function submitShiftLog(e) {
+            e.preventDefault();
+            const woId = document.getElementById('form-workorder').value;
+            const passQty = parseInt(document.getElementById('form-qty-pass').value);
+            const failQty = parseInt(document.getElementById('form-qty-fail').value);
+
+            const wo = WORKORDERS_DB.find(w => w.id === woId);
+            if (wo) {
+                wo.actual = Math.min(wo.target, wo.actual + passQty);
+                if (wo.actual >= wo.target) {
+                    wo.status = 'completed';
+                    showToast(`Selesai: Sasaran sasaran Work Order ${woId} telah dipenuhi!`, 'info');
+                }
+            }
+
+            // ERP inventory reduction simulator
+            const steelCon = passQty * 0.08;
+            const boltCon = passQty * 16;
+
+            const steelMat = ERP_MATERIALS_BOM.find(m => m.id === 'MAT-ST-01');
+            const boltMat = ERP_MATERIALS_BOM.find(m => m.id === 'MAT-BL-12');
+
+            if (steelMat) {
+                const curUsed = parseFloat(steelMat.totalUsed.split(' ')[0]);
+                steelMat.totalUsed = `${(curUsed + steelCon).toFixed(2)} Ton`;
+            }
+            if (boltMat) {
+                const curUsed = parseInt(boltMat.totalUsed.split(' ')[0].replace(/,/g, ''));
+                boltMat.totalUsed = `${(curUsed + boltCon).toLocaleString()} Pcs`;
+            }
+
+            triggerBeepAlert(1200, 0.2);
+            showToast('Laporan dihantar! Data backflush stok ERP berjaya disinkronkan.', 'success');
+            
+            document.getElementById('form-qty-fail').value = '0';
+            
+            switchTab('dashboard');
+            renderJobsBoard();
+        }
+
+        function triggerSAPMockSync(type) {
+            if (type === 'pull') {
+                showToast('Menyinkronkan data pangkalan dari SAP ERP (Pull)...', 'info');
+                setTimeout(() => {
+                    showToast('Work Order berjaya diimport.', 'success');
+                }, 1000);
+            } else {
+                showToast('Hantar isyarat backflush inventori ke SAP S/4HANA (Push)...', 'info');
+                setTimeout(() => {
+                    showToast('Sinkronisasi logistik berjaya.', 'success');
+                }, 1000);
+            }
+        }
+
+        function performGenealogyQuery() {
+            const sn = document.getElementById('genealogy-search-box').value.trim();
+            const output = document.getElementById('genealogy-tree-box');
+
+            if (!output) return;
+
+            const record = PRODUCT_GENEALOGY_DB[sn];
+            if (!record) {
+                output.innerHTML = `
+                    <div class="text-center py-12 text-rose-500 font-bold">
+                        <i class="ti ti-ban text-4xl block mb-2"></i>
+                        Nomor Seri "${sn}" Tidak Terdaftar di Database Pabrik!
+                    </div>
+                `;
+                return;
+            }
+
+            output.innerHTML = `
+                <div class="space-y-4 text-xs">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 border-b border-gray-800 pb-3">
+                        <div class="space-y-1">
+                            <p class="text-gray-500">Nama Produk Otomotif</p>
+                            <p class="font-extrabold text-white text-sm">${record.product}</p>
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-gray-500">Timestamp Cetak Produksi</p>
+                            <p class="font-bold text-indigo-400">${record.timestamp}</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 border-b border-gray-800 pb-3">
+                        <div class="space-y-1">
+                            <p class="text-gray-500">Stasiun Perakitan / Mesin</p>
+                            <p class="font-bold text-gray-200">${record.station}</p>
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-gray-500">Operator Bertanggung Jawab</p>
+                            <p class="font-bold text-gray-200">${record.operator}</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 border-b border-gray-800 pb-3">
+                        <div class="space-y-1">
+                            <p class="text-gray-500 font-bold uppercase tracking-wider text-[10px] text-indigo-400">Log Pengencangan Torsi Atlas Copco</p>
+                            <div class="bg-gray-900 p-2 rounded border border-gray-800 space-y-1 font-mono text-[10px]">
+                                ${record.torqueValues.map(t => `<p>&bull; ${t.joint}: <span class="font-bold text-white">${t.torque}</span> (${t.angle} angle) &rarr; <span class="text-emerald-400 font-bold">${t.status}</span></p>`).join('')}
+                            </div>
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-gray-500">Bahan Baku Asal ERP SAP</p>
+                            <p class="font-bold font-mono text-gray-200">${record.batchMaterial}</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <p class="text-gray-500 mb-2">Komponen Turunan BOM Terikat:</p>
+                        <div class="flex gap-2">
+                            ${record.linkedParts.map(p => `<span class="bg-indigo-500/10 text-indigo-400 font-semibold px-2.5 py-1 rounded-lg border border-indigo-900/30 font-mono text-[10px]">${p}</span>`).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            showToast('Passport digital produk berhasil ditemukan!', 'success');
+        }
+
+        function fillSearchGenealogy(sn) {
+            document.getElementById('genealogy-search-box').value = sn;
+            performGenealogyQuery();
+        }
+
+        function renderRBACMatrixConfigTable() {
+            const tbody = document.getElementById('rbac-tbody');
+            if (!tbody) return;
+
+            const roles = ['Operator', 'Supervisor', 'Manajer', 'IT Admin'];
+
+            tbody.innerHTML = TAB_METADATA.map(tab => {
+                const cells = roles.map(role => {
+                    const hasAccess = activeRBACMatrix[role][tab.id];
+                    const disabled = (role === 'IT Admin' && tab.id === 'rbac') ? 'disabled' : '';
+                    
+                    return `
+                        <td class="py-3 px-4 text-center">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" class="sr-only peer" ${hasAccess ? 'checked' : ''} ${disabled} onchange="toggleRBACKey('${role}', '${tab.id}', this.checked)">
+                                <div class="w-9 h-5 bg-gray-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </td>
+                    `;
+                }).join('');
+
+                return `
+                    <tr class="border-b border-gray-800 hover:bg-gray-900/20">
+                        <td class="py-3 px-4 font-bold text-white">${tab.name}</td>
+                        ${cells}
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function toggleRBACKey(role, tabId, isChecked) {
+            if (appState.currentUserRole !== 'IT Admin') {
+                showToast('Akses ditolak: Hanya IT Admin yang boleh menukar polisi keselamatan.', 'error');
+                renderRBACMatrixConfigTable();
+                return;
+            }
+            activeRBACMatrix[role][tabId] = isChecked;
+        }
+
+        function applyAndSaveRBAC() {
+            enforceRBACSafetyView();
+            showToast('Sistem keselamatan diaktifkan dan dikemas kini.', 'success');
+        }
+
+        function resetRBACDefault() {
+            if (appState.currentUserRole !== 'IT Admin') {
+                showToast('Akses ditolak: Polisi tidak boleh diubah oleh peranan ini.', 'error');
+                return;
+            }
+
+            activeRBACMatrix = {
+                'Operator':   { dashboard: true,  oee: false, produksi: true,  jobs: true,  erp: true,  traceability: true,  spc: true,  cmms: false, database: false, rbac: false },
+                'Supervisor': { dashboard: true,  oee: true,  produksi: true,  jobs: true,  erp: true,  traceability: true,  spc: true,  cmms: true,  database: true,  rbac: false },
+                'Manajer':    { dashboard: true,  oee: true,  produksi: false, jobs: true,  erp: true,  traceability: true,  spc: true,  cmms: true,  database: true,  rbac: false },
+                'IT Admin':   { dashboard: true,  oee: true,  produksi: true,  jobs: true,  erp: true,  traceability: true,  spc: true,  cmms: true,  database: true,  rbac: true  }
+            };
+
+            enforceRBACSafetyView();
+            showToast('Sistem dipulihkan ke tetapan asal.', 'info');
+            renderRBACMatrixConfigTable();
+        }
+
+        function startLiveClock() {
+            setInterval(() => {
+                const now = new Date();
+                const str = now.toLocaleTimeString('id-ID', { hour12: false });
+                document.getElementById('system-live-clock').textContent = str;
+            }, 1000);
+        }
+
+        function showToast(message, type = 'success') {
+            const overlay = document.getElementById('toast-overlay');
+            if (!overlay) return;
+
+            const toast = document.createElement('div');
+            toast.className = 'glass-panel p-4 rounded-xl shadow-2xl flex items-center gap-3 border transition-all duration-300 transform translate-y-4 opacity-0 pointer-events-auto text-xs font-bold';
+            
+            let color = 'border-emerald-500/30 text-emerald-400 bg-emerald-950/20';
+            let icon = 'ti ti-circle-check';
+
+            if (type === 'error') {
+                color = 'border-rose-500/30 text-rose-400 bg-rose-950/20';
+                icon = 'ti ti-alert-triangle';
+            } else if (type === 'info') {
+                color = 'border-indigo-500/30 text-indigo-400 bg-indigo-950/20';
+                icon = 'ti ti-info-circle';
+            }
+
+            toast.className += ` ${color}`;
+            toast.innerHTML = `
+                <i class="${icon} text-lg"></i>
+                <span>${message}</span>
+            `;
+
+            overlay.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-4', 'opacity-0');
+            }, 50);
+
+            setTimeout(() => {
+                toast.classList.add('translate-y-4', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        function buildSCADALiveChart() {
+            const canvas = document.getElementById('scada-telemetry-chart');
+            if (!canvas) return;
+
+            if (scadaChartRef) scadaChartRef.destroy();
+
+            const meanVals = Array(8).fill(45.0);
+
+            scadaChartRef = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: ['T-7', 'T-6', 'T-5', 'T-4', 'T-3', 'T-2', 'T-1', 'Aktual'],
+                    datasets: [
+                        {
+                            label: 'Torsi Aktif (Nm)',
+                            data: spcTorqueSamples,
+                            borderColor: '#4F46E5',
+                            backgroundColor: 'rgba(79, 70, 229, 0.05)',
+                            fill: true,
+                            tension: 0.3,
+                            borderWidth: 3,
+                            pointRadius: 4
+                        },
+                        {
+                            label: 'Target Torsi (45 Nm)',
+                            data: meanVals,
+                            borderColor: '#10B981',
+                            borderDash: [5, 5],
+                            borderWidth: 1.5,
+                            fill: false,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: '#1F2937' }, ticks: { color: '#9CA3AF', font: { family: 'Plus Jakarta Sans' } } },
+                        y: { grid: { color: '#1F2937' }, ticks: { color: '#9CA3AF' }, min: 41, max: 49 }
+                    }
+                }
+            });
+        }
+
+        function buildOEETrendChart() {
+            const canvas = document.getElementById('oee-trend-chart');
+            if (!canvas) return;
+
+            if (oeeChartRef) oeeChartRef.destroy();
+
+            oeeChartRef = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: ['D-10', 'D-9', 'D-8', 'D-7', 'D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'Hari Ini'],
+                    datasets: [
+                        { label: 'Availability', data: [91, 90, 88, 92, 91, 93, 90, 92, 91, 92.1], backgroundColor: '#4F46E5', borderRadius: 4 },
+                        { label: 'Performance', data: [94, 95, 93, 94, 95, 96, 94, 95, 96, 95.7], backgroundColor: '#10B981', borderRadius: 4 },
+                        { label: 'Quality', data: [98, 97, 98, 99, 98, 98, 99, 98, 98, 98.9], backgroundColor: '#F59E0B', borderRadius: 4 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#9CA3AF', font: { family: 'Plus Jakarta Sans' } } } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#9CA3AF' } },
+                        y: { grid: { color: '#1F2937' }, ticks: { color: '#9CA3AF' }, min: 80, max: 100 }
+                    }
+                }
+            });
+        }
+
+        function buildSPCOutputChart() {
+            const canvas = document.getElementById('spc-control-chart');
+            if (!canvas) return;
+
+            if (spcChartRef) spcChartRef.destroy();
+
+            const ucl = Array(8).fill(47.0);
+            const lcl = Array(8).fill(43.0);
+            const target = Array(8).fill(45.0);
+
+            spcChartRef = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'],
+                    datasets: [
+                        {
+                            label: 'Pengukuran',
+                            data: spcTorqueSamples,
+                            borderColor: '#4F46E5',
+                            backgroundColor: '#4F46E5',
+                            tension: 0.1,
+                            borderWidth: 3,
+                            pointRadius: 6
+                        },
+                        {
+                            label: 'Batas Atas (UCL)',
+                            data: ucl,
+                            borderColor: '#EF4444',
+                            borderDash: [6, 6],
+                            fill: false,
+                            pointRadius: 0,
+                            borderWidth: 1.5
+                        },
+                        {
+                            label: 'Batas Bawah (LCL)',
+                            data: lcl,
+                            borderColor: '#EF4444',
+                            borderDash: [6, 6],
+                            fill: false,
+                            pointRadius: 0,
+                            borderWidth: 1.5
+                        },
+                        {
+                            label: 'Target Torsi',
+                            data: target,
+                            borderColor: '#10B981',
+                            fill: false,
+                            pointRadius: 0,
+                            borderWidth: 1.5
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#9CA3AF' } } },
+                    scales: {
+                        x: { grid: { color: '#1F2937' }, ticks: { color: '#9CA3AF' } },
+                        y: { grid: { color: '#1F2937' }, ticks: { color: '#9CA3AF' }, min: 41.5, max: 48.5 }
+                    }
+                }
+            });
+        }
+
+        function updateBOMMaterialPreview() {
+            const woId = document.getElementById('form-workorder').value;
+            const passQty = parseInt(document.getElementById('form-qty-pass').value) || 0;
+            const previewBox = document.getElementById('bom-material-preview');
+            const payloadBox = document.getElementById('erp-payload-json');
+
+            const wo = WORKORDERS_DB.find(w => w.id === woId);
+            if (!wo) return;
+
+            let steelCon = (passQty * 0.08).toFixed(2);
+            let boltCon = passQty * 16;
+            
+            if (previewBox) {
+                previewBox.innerHTML = `
+                    <p>&bull; Kebutuhan Baja Coil: <span class="font-bold text-white">${steelCon} Ton</span> (BOM ID: MAT-ST-01)</p>
+                    <p>&bull; Kebutuhan Baut Torsi M12: <span class="font-bold text-white">${boltCon} Pcs</span> (BOM ID: MAT-BL-12)</p>
+                    <p>&bull; Sasaran Backflush ERP: <span class="text-indigo-400 font-bold">Automatik Seketika</span></p>
+                `;
+            }
+
+            const payload = {
+                header: {
+                    transaction_id: `TX-MES-${Math.floor(100000 + Math.random() * 899999)}`,
+                    timestamp_utc: new Date().toISOString(),
+                    sap_route: "RFC_BACKFLUSH_STOCK_CONFIRM"
+                },
+                production_order: {
+                    work_order_id: woId,
+                    assembly_product_name: wo.product,
+                    completed_quantity: passQty,
+                    operator_sign: appState.currentUserName
+                },
+                materials_consumed_bom: [
+                    { material_id: "MAT-ST-01", quantity_deducted: parseFloat(steelCon), unit: "Ton" },
+                    { material_id: "MAT-BL-12", quantity_deducted: boltCon, unit: "Pcs" }
+                ]
+            };
+
+            if (payloadBox) {
+                payloadBox.textContent = JSON.stringify(payload, null, 4);
+            }
+        }
+
+        // Loop update simulated changes on charts and clock load
+        window.onload = function() {
+            startLiveClock();
+        };
+    </script>
+</body>
+</html>
